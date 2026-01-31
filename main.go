@@ -40,6 +40,23 @@ func main() {
 			Cookie: string(cookieBytes),
 			Base:   *flagBase,
 		})
+
+	case "build":
+		buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
+		flagBase := buildCmd.String("base", "downloads", "base directory to scan")
+
+		buildCmd.Parse(os.Args[2:])
+
+		if *flagBase == "" {
+			fmt.Println("Error: -base is required")
+			buildCmd.PrintDefaults()
+			os.Exit(1)
+		}
+
+		cmd.Build(cmd.BuildArgs{
+			Base: *flagBase,
+		})
+
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -54,8 +71,9 @@ Usage:
   pGallery <command> [arguments]
 
 Commands:
-  sync    Sync bookmarks for a user
+  sync      Sync bookmarks for a user
+  build	  	Indexing the database
 
-Use "pGallery sync -help" for more information about the sync command.
+Use "pGallery <command> -help" for more information.
 `)
 }

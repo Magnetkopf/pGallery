@@ -195,7 +195,7 @@ func Sync(args SyncArgs) {
 			CreateDate:  gjson.Get(illustRes, "body.createDate").String(),
 		}
 
-		artistDetailData := model.ArtistDetail{
+		artistDetailData := model.ArtistData{
 			ID:      int(gjson.Get(illustRes, "body.userId").Int()),
 			Name:    gjson.Get(illustRes, "body.userName").String(),
 			Account: gjson.Get(illustRes, "body.userAccount").String(),

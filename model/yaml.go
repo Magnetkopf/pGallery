@@ -19,7 +19,7 @@ type ArtworkData struct {
 	CreateDate  string    `yaml:"create_date"`
 }
 
-type ArtistDetail struct {
+type ArtistData struct {
 	ID      int    `yaml:"id"`
 	Name    string `yaml:"name"`
 	Account string `yaml:"account"`
