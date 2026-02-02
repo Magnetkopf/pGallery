@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Magnetkopf/pGallery/cmd"
 )
@@ -37,7 +38,7 @@ func main() {
 
 		cmd.Sync(cmd.SyncArgs{
 			UserID: *flagUser,
-			Cookie: string(cookieBytes),
+			Cookie: strings.TrimSpace(string(cookieBytes)),
 			Base:   *flagBase,
 		})
 
