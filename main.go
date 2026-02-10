@@ -58,6 +58,18 @@ func main() {
 			Base: *flagBase,
 		})
 
+	case "webui":
+		webuiCmd := flag.NewFlagSet("webui", flag.ExitOnError)
+		flagBase := webuiCmd.String("base", "downloads", "base directory")
+		flagPort := webuiCmd.Int("port", 8080, "port to listen on")
+
+		webuiCmd.Parse(os.Args[2:])
+
+		cmd.WebUI(cmd.WebUIArgs{
+			Base: *flagBase,
+			Port: *flagPort,
+		})
+
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -74,6 +86,7 @@ Usage:
 Commands:
   sync      Sync bookmarks for a user
   build	  	Indexing the database
+  webui     Start web UI
 
 Use "pGallery <command> -help" for more information.
 `)
