@@ -1,8 +1,8 @@
-name: Release
+name: Dev Release
 
 on:
-  release:
-    types: [ published ]
+  push:
+    branches: [ "dev" ]
     
 permissions:
   contents: write
@@ -24,7 +24,6 @@ jobs:
             goos: linux
             goarch: arm64
 
-
     steps:
     - uses: actions/checkout@v4
 
@@ -44,12 +43,15 @@ jobs:
     - name: Create tar.gz
       run: |
         tar -czf pGallery_${{ matrix.target }}.tar.gz pGallery
+        sha256sum pGallery_${{ matrix.target }}.tar.gz > pGallery_${{ matrix.target }}.tar.gz.sha256
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.target }}
-        path: pGallery_${{ matrix.target }}.tar.gz
+        path: |
+          pGallery_${{ matrix.target }}.tar.gz
+          pGallery_${{ matrix.target }}.tar.gz.sha256
 
   release:
     runs-on: ubuntu-latest
@@ -63,3 +65,5 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: dist/**/*
+        prerelease: true
+        tag_name: dev
