@@ -40,12 +40,16 @@ jobs:
         CGO_ENABLED: 0
       run: |
         go build -o pGallery ./main.go
+
+    - name: Create tar.gz
+      run: |
+        tar -czf pGallery_${{ matrix.target }}.tar.gz pGallery
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.target }}
-        path: pGallery
+        path: pGallery_${{ matrix.target }}.tar.gz
 
   release:
     runs-on: ubuntu-latest
