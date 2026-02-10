@@ -44,12 +44,15 @@ jobs:
     - name: Create tar.gz
       run: |
         tar -czf pGallery_${{ matrix.target }}.tar.gz pGallery
+        sha256sum pGallery_${{ matrix.target }}.tar.gz > pGallery_${{ matrix.target }}.tar.gz.sha256
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.target }}
-        path: pGallery_${{ matrix.target }}.tar.gz
+        path: |
+          pGallery_${{ matrix.target }}.tar.gz
+          pGallery_${{ matrix.target }}.tar.gz.sha256
 
   release:
     runs-on: ubuntu-latest
