@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/Magnetkopf/pGallery/model"
+	"gopkg.in/yaml.v3"
 )
 
 type WebUIArgs struct {
@@ -47,6 +49,7 @@ func WebUI(args WebUIArgs) {
 	http.HandleFunc("/", ctx.handleHome)
 	http.HandleFunc("/artist", ctx.handleArtistList)
 	http.HandleFunc("/tag", ctx.handleTagList)
+	http.HandleFunc("/artwork", ctx.handleArtwork)
 
 	fs := http.FileServer(http.Dir(args.Base))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -105,10 +108,10 @@ const homeTmpl = `
 	<div class="grid">
 		{{range .Artworks}}
 			<div class="card">
-				<a href="/static/{{.Thumbnail}}" target="_blank">
-					<img src="/static/{{.Thumbnail}}" loading="lazy" alt="{{.Title}}">
+				<img src="/static/{{.Thumbnail}}" loading="lazy" alt="{{.Title}}">
+				<a href="/artwork?id={{.ID}}">
+					<div class="title">{{.Title}}</div>
 				</a>
-				<div class="title">{{.Title}}</div>
 				<div class="meta">ID: {{.ID}}</div>
 				<div class="meta">Pages: {{.PageCount}}</div>
 				<div class="meta">Artist: <a href="/?artist={{.ArtistID}}">{{.ArtistID}}</a></div>
@@ -148,6 +151,11 @@ type ListView struct {
 	Title string
 	Type  string // "artist" or "tag" -> used for query param key
 	Items []ListItem
+}
+
+type ArtworkDetailView struct {
+	Artwork model.ArtworkData
+	Images  []string
 }
 
 // Handlers Implementation
@@ -264,6 +272,119 @@ func renderList(w http.ResponseWriter, view ListView) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	err = tmpl.Execute(w, view)
+	if err != nil {
+		log.Printf("Error executing template: %v", err)
+	}
+}
+
+const artworkTmpl = `
+{{define "content"}}
+	<div class="artwork-detail">
+		<h1>{{.Artwork.Title}}</h1>
+		<div class="meta">
+			Artist: <a href="/?artist={{.Artwork.ArtistId}}">{{.Artwork.ArtistName}}</a> |
+			Date: {{.Artwork.CreateDate}} |
+			Pages: {{.Artwork.PageCount}}
+		</div>
+		<div class="tags">
+			Tags:
+			{{range .Artwork.Tags}}
+				<a href="/?tag={{.Tag}}">{{.Tag}}</a>
+			{{end}}
+		</div>
+		<div class="description">
+			{{.Artwork.Description}}
+		</div>
+		<div class="images">
+			{{range .Images}}
+				<div class="image-container">
+					<img src="/static/{{.}}" alt="Page">
+				</div>
+			{{end}}
+		</div>
+	</div>
+	<style>
+		.artwork-detail { background: #fff; padding: 20px; border-radius: 5px; }
+		.artwork-detail .meta { margin-bottom: 10px; color: #666; }
+		.artwork-detail .tags a { margin-right: 10px; text-decoration: none; color: #007bff; }
+		.artwork-detail .description { margin: 20px 0; white-space: pre-wrap; }
+		.image-container { margin-bottom: 20px; text-align: center; }
+		.image-container img { max-width: 100%; height: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+	</style>
+{{end}}
+`
+
+func (ctx *WebUIContext) handleArtwork(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "Missing id", http.StatusBadRequest)
+		return
+	}
+
+	card, ok := ctx.Store.ArtworkIndex[id]
+	if !ok {
+		http.Error(w, "Artwork not found", http.StatusNotFound)
+		return
+	}
+
+	artistPath := filepath.Join(ctx.Base, card.ArtistID)
+	artworkPath := filepath.Join(artistPath, card.ID)
+	artworkYamlPath := filepath.Join(artworkPath, "artwork.yaml")
+
+	yamlBytes, err := os.ReadFile(artworkYamlPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read artwork.yaml: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var artworkData model.ArtworkData
+	if err := yaml.Unmarshal(yamlBytes, &artworkData); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse artwork.yaml: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Find images
+	var images []string
+	files, err := os.ReadDir(artworkPath)
+	if err != nil {
+		log.Printf("Failed to read dir %s: %v", artworkPath, err)
+	} else {
+
+		for i := 0; i < artworkData.PageCount; i++ {
+			prefix := fmt.Sprintf("p%d.", i)
+			found := false
+			for _, file := range files {
+				if strings.HasPrefix(file.Name(), prefix) {
+					// Relative path for static file server: ArtistID/ArtworkID/Filename
+					relPath := filepath.Join(card.ArtistID, card.ID, file.Name())
+					images = append(images, relPath)
+					found = true
+					break
+				}
+			}
+			if !found {
+				log.Printf("Warning: Image for page %d not found in %s", i, artworkPath)
+			}
+		}
+	}
+
+	view := ArtworkDetailView{
+		Artwork: artworkData,
+		Images:  images,
+	}
+
+	tmpl, err := template.New("layout").Parse(layoutTmpl)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	tmpl, err = tmpl.Parse(artworkTmpl)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	err = tmpl.Execute(w, view)
 	if err != nil {
 		log.Printf("Error executing template: %v", err)
