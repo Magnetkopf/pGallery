@@ -2,9 +2,11 @@
 
 Self-hosted pixiv gallery with built-in sync.
 
-- 🪼 Friendly for Jellyfin
+- 🌐 Web UI
+- 🔭 Filter by artist and tag
 - 📄 Standalone metadata(yaml)
-- 📁 No database required 
+- 🪼 Friendly for Jellyfin
+- 📁 No database required
 
 ## Usage
 
@@ -14,4 +16,7 @@ Self-hosted pixiv gallery with built-in sync.
 
 #Build index
 ./pGallery build -base <dir>
+
+#Start WebUI
+./pGallery webui -base <dir> -port <port>
 ~~~
