@@ -38,7 +38,6 @@ func WebUI(args WebUIArgs) {
 		log.Fatalf("Failed to parse index.json: %v", err)
 	}
 
-
 	ctx := &WebUIContext{
 		Store: &store,
 		Base:  args.Base,
@@ -49,7 +48,6 @@ func WebUI(args WebUIArgs) {
 	http.HandleFunc("/artist", ctx.handleArtistList)
 	http.HandleFunc("/tag", ctx.handleTagList)
 
-	
 	fs := http.FileServer(http.Dir(args.Base))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
@@ -59,7 +57,6 @@ func WebUI(args WebUIArgs) {
 		log.Fatal(err)
 	}
 }
-
 
 const layoutTmpl = `
 <!DOCTYPE html>
@@ -164,7 +161,12 @@ func (ctx *WebUIContext) handleHome(w http.ResponseWriter, r *http.Request) {
 
 	if artistID != "" {
 		filterInfo = "Artist ID: " + artistID
-		artworks = ctx.Store.ArtistIndex[artistID]
+		if detail, ok := ctx.Store.ArtistIndex[artistID]; ok {
+			artworks = detail.Artworks
+			if detail.Name != "" {
+				filterInfo = "Artist: " + detail.Name
+			}
+		}
 	} else if tagName != "" {
 		filterInfo = "Tag: " + tagName
 		artworks = ctx.Store.TagIndex[tagName]
@@ -203,11 +205,15 @@ func (ctx *WebUIContext) handleHome(w http.ResponseWriter, r *http.Request) {
 
 func (ctx *WebUIContext) handleArtistList(w http.ResponseWriter, r *http.Request) {
 	var items []ListItem
-	for artistID, artworks := range ctx.Store.ArtistIndex {
+	for artistID, detail := range ctx.Store.ArtistIndex {
+		label := detail.Name
+		if label == "" {
+			label = artistID
+		}
 		items = append(items, ListItem{
-			Label: artistID,
+			Label: label,
 			Value: artistID,
-			Count: len(artworks),
+			Count: len(detail.Artworks),
 		})
 	}
 

@@ -22,7 +22,7 @@ func Build(args BuildArgs) {
 	store := model.Store{
 		ArtworkIndex: make(map[string]*model.ArtworkCard),
 		TagIndex:     make(map[string][]*model.ArtworkCard),
-		ArtistIndex:  make(map[string][]*model.ArtworkCard),
+		ArtistIndex:  make(map[string]*model.ArtistDetail),
 	}
 
 	artistEntries, err := os.ReadDir(args.Base)
@@ -88,7 +88,23 @@ func Build(args BuildArgs) {
 			}
 
 			store.ArtworkIndex[card.ID] = card
-			store.ArtistIndex[artistID] = append(store.ArtistIndex[artistID], card)
+
+			if _, ok := store.ArtistIndex[artistID]; !ok {
+				artistName := artistID // Default key
+				artistYamlBytes, err := os.ReadFile(artistYamlPath)
+				if err == nil {
+					var artistData model.ArtistData
+					if err := yaml.Unmarshal(artistYamlBytes, &artistData); err == nil && artistData.Name != "" {
+						artistName = artistData.Name
+					}
+				}
+
+				store.ArtistIndex[artistID] = &model.ArtistDetail{
+					Name:     artistName,
+					Artworks: []*model.ArtworkCard{},
+				}
+			}
+			store.ArtistIndex[artistID].Artworks = append(store.ArtistIndex[artistID].Artworks, card)
 
 			for _, tag := range artworkData.Tags {
 				store.TagIndex[tag.Tag] = append(store.TagIndex[tag.Tag], card)
