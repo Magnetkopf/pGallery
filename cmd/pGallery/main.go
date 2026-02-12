@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Magnetkopf/pGallery/cmd"
+	"github.com/Magnetkopf/pGallery/internal/cli"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		cmd.Sync(cmd.SyncArgs{
+		cli.Sync(cli.SyncArgs{
 			UserID: *flagUser,
 			Cookie: strings.TrimSpace(string(cookieBytes)),
 			Base:   *flagBase,
@@ -54,7 +54,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		cmd.Build(cmd.BuildArgs{
+		cli.Build(cli.BuildArgs{
 			Base: *flagBase,
 		})
 
@@ -65,7 +65,7 @@ func main() {
 
 		webuiCmd.Parse(os.Args[2:])
 
-		cmd.WebUI(cmd.WebUIArgs{
+		cli.WebUI(cli.WebUIArgs{
 			Base: *flagBase,
 			Port: *flagPort,
 		})

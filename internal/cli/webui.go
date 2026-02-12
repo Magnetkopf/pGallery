@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Magnetkopf/pGallery/model"
+	"github.com/Magnetkopf/pGallery/internal/model"
 	"gopkg.in/yaml.v3"
 )
 

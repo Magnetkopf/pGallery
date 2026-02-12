@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"encoding/json"
@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Magnetkopf/pGallery/api"
-	"github.com/Magnetkopf/pGallery/model"
-	"github.com/Magnetkopf/pGallery/utils"
+	"github.com/Magnetkopf/pGallery/internal/model"
+	"github.com/Magnetkopf/pGallery/internal/pixiv"
+	"github.com/Magnetkopf/pGallery/internal/utils"
 	"github.com/tidwall/gjson"
 	"gopkg.in/yaml.v3"
 )
@@ -26,7 +26,7 @@ type SyncArgs struct {
 const limitPerPage = 48
 
 func Sync(args SyncArgs) {
-	client := &api.Client{
+	client := &pixiv.Client{
 		Cookie: args.Cookie,
 	}
 
