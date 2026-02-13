@@ -66,4 +66,4 @@ jobs:
       with:
         files: dist/**/*
         prerelease: true
-        tag_name: dev
+        tag_name: nightly
