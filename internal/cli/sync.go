@@ -83,7 +83,8 @@ func Sync(args SyncArgs) {
 
 			artworkList = append(artworkList, artworkID)
 
-			artistPFP[artistID] = value.Get("profileImageUrl").String()
+			//replace to get higher quality profile photo
+			artistPFP[artistID] = strings.Replace(value.Get("profileImageUrl").String(), "_50.", "_170.", -1)
 			return true
 		})
 
@@ -111,9 +112,10 @@ func Sync(args SyncArgs) {
 
 		url := gjson.Get(illustRes, "body.urls.original").String()
 		artistID := int(gjson.Get(illustRes, "body.userId").Int())
-		savePath := filepath.Join(args.Base, strconv.Itoa(artistID), strconv.Itoa(int(artworkID)))
-		artworkYamlFile := filepath.Join(savePath, "artwork.yaml")
-		artistYamlFile := filepath.Join(args.Base, strconv.Itoa(artistID), "artist.yaml")
+		artworkPath := filepath.Join(args.Base, strconv.Itoa(artistID), strconv.Itoa(int(artworkID)))
+		artistPath := filepath.Join(args.Base, strconv.Itoa(artistID))
+		artworkYamlFile := filepath.Join(artworkPath, "artwork.yaml")
+		artistYamlFile := filepath.Join(artistPath, "artist.yaml")
 
 		// Download all pictures
 		pageCount := gjson.Get(illustRes, "body.pageCount").Uint()
@@ -123,14 +125,14 @@ func Sync(args SyncArgs) {
 			newUrl := strings.Replace(url, "_p0.", "_p"+strconv.Itoa(int(i))+".", -1)
 
 			downloadResult := utils.Download(utils.Aria2cArgs{
-				Url:      newUrl,
-				SavePath: savePath,
-				FileName: fileName,
-				Referer:  "https://www.pixiv.net",
+				Url:         newUrl,
+				SavePath:    artworkPath,
+				FileName:    fileName,
+				Referer:     "https://www.pixiv.net",
 			})
 
 			if downloadResult {
-				fullFilePath := filepath.Join(savePath, fileName)
+				fullFilePath := filepath.Join(artworkPath, fileName)
 				err = utils.ModifyPictureExtension(fullFilePath)
 				if err != nil {
 					log.Printf("⚠️ Failed to modify picture extension: %v", err)
@@ -139,7 +141,7 @@ func Sync(args SyncArgs) {
 
 				if i == 0 { //copy p0 as folder picture
 					folderFileName := "folder." + fileExtension
-					folderFilePath := filepath.Join(savePath, folderFileName)
+					folderFilePath := filepath.Join(artworkPath, folderFileName)
 					if err := utils.CopyFile(fullFilePath, folderFilePath); err != nil {
 						log.Printf("⚠️ Failed to create folder image: %v", err)
 					}
@@ -155,12 +157,12 @@ func Sync(args SyncArgs) {
 		if artistPFPUrl != "" {
 			downloadResult := utils.Download(utils.Aria2cArgs{
 				Url:      artistPFPUrl,
-				SavePath: savePath,
+				SavePath: artistPath,
 				FileName: "folder.jpg",
 				Referer:  "https://www.pixiv.net",
 			})
 			if downloadResult {
-				fullFilePath := filepath.Join(savePath, "folder.jpg")
+				fullFilePath := filepath.Join(artistPath, "folder.jpg")
 				err = utils.ModifyPictureExtension(fullFilePath)
 				if err != nil {
 					log.Printf("⚠️ Failed to modify picture extension: %v", err)
