@@ -14,6 +14,10 @@ type Aria2cArgs struct {
 }
 
 func Download(args Aria2cArgs) bool {
+	if !checkAria2c() {
+		log.Fatalf("aria2c not found")
+	}
+
 	maxRetries := 5
 	for attempts := 0; attempts < maxRetries; attempts++ {
 		cmd := exec.Command("aria2c",
@@ -36,4 +40,14 @@ func Download(args Aria2cArgs) bool {
 	}
 	log.Fatalf("Failed to download after %d attempts: %s", maxRetries, args.Url)
 	return false
+}
+
+func checkAria2c() bool {
+	cmd := exec.Command("aria2c", "--version")
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("aria2c not found: %v", err)
+		return false
+	}
+	return true
 }
