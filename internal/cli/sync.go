@@ -83,7 +83,8 @@ func Sync(args SyncArgs) {
 
 			artworkList = append(artworkList, artworkID)
 
-			artistPFP[artistID] = value.Get("profileImageUrl").String()
+			//replace to get higher quality profile photo
+			artistPFP[artistID] = strings.Replace(value.Get("profileImageUrl").String(), "_50.", "_170.", -1)
 			return true
 		})
 
