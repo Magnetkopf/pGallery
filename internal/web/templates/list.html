@@ -1,0 +1,10 @@
+{{define "content"}}
+	<h1>{{.Title}}</h1>
+	<div class="list">
+		{{range .Items}}
+			<div class="list-item">
+				<a href="/?{{$.Type}}={{.Value}}">{{.Label}} ({{.Count}})</a>
+			</div>
+		{{end}}
+	</div>
+{{end}}

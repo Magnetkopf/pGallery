@@ -1,0 +1,20 @@
+{{define "content"}}
+	{{if .Filter}}
+		<div class="filter-info">
+			Filter: <strong>{{.Filter}}</strong>
+		</div>
+	{{end}}
+	<div class="grid">
+		{{range .Artworks}}
+			<div class="card">
+				<img src="/static/{{.Thumbnail}}" loading="lazy" alt="{{.Title}}">
+				<a href="/artwork?id={{.ID}}">
+					<div class="title">{{.Title}}</div>
+				</a>
+				<div class="meta">ID: {{.ID}}</div>
+				<div class="meta">Pages: {{.PageCount}}</div>
+				<div class="meta">Artist: <a href="/?artist={{.ArtistID}}">{{.ArtistID}}</a></div>
+			</div>
+		{{end}}
+	</div>
+{{end}}
