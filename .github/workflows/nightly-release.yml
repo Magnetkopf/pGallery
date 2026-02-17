@@ -1,8 +1,8 @@
-name: Dev Release
+name: Nightly Release
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "main" ]
     
 permissions:
   contents: write
