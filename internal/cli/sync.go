@@ -12,7 +12,7 @@ import (
 
 	"github.com/Magnetkopf/pGallery/internal/model"
 	"github.com/Magnetkopf/pGallery/internal/pixiv"
-	"github.com/Magnetkopf/pGallery/internal/utils"
+	"github.com/Magnetkopf/pGallery/utils"
 	"github.com/tidwall/gjson"
 	"gopkg.in/yaml.v3"
 )
