@@ -20,12 +20,13 @@ type DownloaderArgs struct {
 	SavePath string
 	FileName string
 	Referer  string
+	Downloader string
 }
 
 // Download chooses aria2c or built-in downloader to download file
 func Download(args DownloaderArgs) bool {
-	if !checkAria2c() {
-		//aria2c not found, use built-in downloader
+	if !checkAria2c() || args.Downloader == "built-in" {
+		//aria2c not found or built-in downloader is specified
 		err := simpleDownload(args)
 		if err != nil {
 			log.Printf("Failed to download %s: %v", args.Url, err)

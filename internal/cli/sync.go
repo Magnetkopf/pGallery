@@ -18,9 +18,10 @@ import (
 )
 
 type SyncArgs struct {
-	Cookie string
-	UserID string
-	Base   string
+	Cookie     string
+	UserID     string
+	Base       string
+	Downloader string
 }
 
 const limitPerPage = 48
@@ -129,6 +130,7 @@ func Sync(args SyncArgs) {
 				SavePath:    artworkPath,
 				FileName:    fileName,
 				Referer:     "https://www.pixiv.net",
+				Downloader:  args.Downloader,
 			})
 
 			if downloadResult {
@@ -160,6 +162,7 @@ func Sync(args SyncArgs) {
 				SavePath: artistPath,
 				FileName: "folder.jpg",
 				Referer:  "https://www.pixiv.net",
+				Downloader: args.Downloader,
 			})
 			if downloadResult {
 				fullFilePath := filepath.Join(artistPath, "folder.jpg")
