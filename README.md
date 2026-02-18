@@ -1,4 +1,4 @@
-# pGallery
+![pGallery](images/pgallery.svg)
 
 Self-hosted pixiv gallery with built-in sync.
 
