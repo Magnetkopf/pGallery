@@ -65,11 +65,22 @@ func Start(args ServerArgs) {
 	}
 }
 
-// View Models
+type Pagination struct {
+	CurrentPage int
+	TotalPages  int
+	TotalItems  int
+	Limit       int
+	HasPrev     bool
+	HasNext     bool
+	PrevPage    int
+	NextPage    int
+}
 
 type HomeView struct {
-	Artworks []*model.ArtworkCard
-	Filter   string
+	Artworks   []*model.ArtworkCard
+	Filter     string
+	Query      template.URL
+	Pagination Pagination
 }
 
 type ListItem struct {
@@ -92,37 +103,126 @@ type ArtworkDetailView struct {
 // Handlers Implementation
 
 func (ctx *WebContext) handleHome(w http.ResponseWriter, r *http.Request) {
-	artistID := r.URL.Query().Get("artist")
-	tagName := r.URL.Query().Get("tag")
+	query := r.URL.Query()
+	artistID := query.Get("artist")
+	tagName := query.Get("tag")
+	pageStr := query.Get("page")
+	limitStr := query.Get("limit")
 
-	var artworks []*model.ArtworkCard
-	var filterInfo string
+	page := 1
+	if pageStr != "" {
+		fmt.Sscanf(pageStr, "%d", &page)
+	}
+	if page < 1 {
+		page = 1
+	}
 
-	if artistID != "" {
-		filterInfo = "Artist ID: " + artistID
-		if detail, ok := ctx.Store.ArtistIndex[artistID]; ok {
-			artworks = detail.Artworks
-			if detail.Name != "" {
-				filterInfo = "Artist: " + detail.Name
+	limit := 20
+	if limitStr != "" {
+		fmt.Sscanf(limitStr, "%d", &limit)
+	}
+	if limit < 1 {
+		limit = 20
+	}
+
+	// Filter
+	var filtered []*model.ArtworkCard
+
+	// If no filters, start with all
+	if artistID == "" && tagName == "" {
+		filtered = make([]*model.ArtworkCard, 0, len(ctx.Store.ArtworkIndex))
+		for _, artwork := range ctx.Store.ArtworkIndex {
+			filtered = append(filtered, artwork)
+		}
+	} else {
+		// If artist filter is present
+		var artistArtworks []*model.ArtworkCard
+		if artistID != "" {
+			if detail, ok := ctx.Store.ArtistIndex[artistID]; ok {
+				artistArtworks = detail.Artworks
 			}
 		}
-	} else if tagName != "" {
-		filterInfo = "Tag: " + tagName
-		artworks = ctx.Store.TagIndex[tagName]
-	} else {
-		artworks = make([]*model.ArtworkCard, 0, len(ctx.Store.ArtworkIndex))
-		for _, artwork := range ctx.Store.ArtworkIndex {
-			artworks = append(artworks, artwork)
+
+		// If tag filter is present
+		var tagArtworks []*model.ArtworkCard
+		if tagName != "" {
+			tagArtworks = ctx.Store.TagIndex[tagName]
+		}
+
+		// Combine filters
+		if artistID != "" && tagName != "" {
+
+			tagMap := make(map[string]bool)
+			for _, art := range tagArtworks {
+				tagMap[art.ID] = true
+			}
+			for _, art := range artistArtworks {
+				if tagMap[art.ID] {
+					filtered = append(filtered, art)
+				}
+			}
+		} else if artistID != "" {
+			filtered = artistArtworks
+		} else if tagName != "" {
+			filtered = tagArtworks
 		}
 	}
 
-	sort.Slice(artworks, func(i, j int) bool {
-		return artworks[i].ID > artworks[j].ID
+	// Sort (descending by ID)
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].ID > filtered[j].ID
 	})
 
+	// Pagination
+	totalItems := len(filtered)
+	totalPages := (totalItems + limit - 1) / limit
+	if page > totalPages && totalPages > 0 {
+		page = totalPages
+	}
+
+	start := (page - 1) * limit
+	end := start + limit
+	if start > totalItems {
+		start = totalItems
+	}
+	if end > totalItems {
+		end = totalItems
+	}
+
+	pagedArtworks := filtered[start:end]
+
+	var filterInfo []string
+	if artistID != "" {
+		filterInfo = append(filterInfo, "Artist: "+artistID)
+		if detail, ok := ctx.Store.ArtistIndex[artistID]; ok && detail.Name != "" {
+			filterInfo[len(filterInfo)-1] = "Artist: " + detail.Name
+		}
+	}
+	if tagName != "" {
+		filterInfo = append(filterInfo, "Tag: "+tagName)
+	}
+
+	// Reconstruct query for pagination links (excluding page and limit)
+	q := r.URL.Query()
+	q.Del("page")
+	q.Del("limit")
+
+	rawQuery := q.Encode()
+
 	view := HomeView{
-		Artworks: artworks,
-		Filter:   filterInfo,
+		Artworks: pagedArtworks,
+		Filter:   strings.Join(filterInfo, ", "),
+		Query:    template.URL(rawQuery),
+		Pagination: Pagination{
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			TotalItems:  totalItems,
+			Limit:       limit,
+			HasPrev:     page > 1,
+			HasNext:     page < totalPages,
+			PrevPage:    page - 1,
+			NextPage:    page + 1,
+		},
 	}
 
 	tmpl, err := template.ParseFS(templateFS, "templates/layout.html", "templates/home.html")
