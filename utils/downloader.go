@@ -96,11 +96,6 @@ func simpleDownload(args DownloaderArgs) error {
 	fileSize, _ := strconv.ParseInt(contentLength, 10, 64)
 	fmt.Printf("📦 File size: %.2f MB\n", float64(fileSize)/1024/1024)
 
-	//check if support range
-	if resp.Header.Get("Accept-Ranges") != "bytes" {
-		return errors.New("Server does not support range")
-	}
-
 	//ensure directory exists
 	if err := os.MkdirAll(args.SavePath, 0755); err != nil {
 		return err
@@ -120,13 +115,20 @@ func simpleDownload(args DownloaderArgs) error {
 
 	//calculate part size
 	var wg sync.WaitGroup
-	partSize := fileSize / int64(WorkerCount)
+	numWorkers := WorkerCount
+	partSize := fileSize / int64(numWorkers)
+
+	//if not support range, download as one part
+	if resp.Header.Get("Accept-Ranges") != "bytes" {
+		partSize = fileSize
+		numWorkers = 1
+	}
 
 	//start multiple threads
-	progressChan := make(chan int64, WorkerCount)
-	errChan := make(chan error, WorkerCount)
+	progressChan := make(chan int64, numWorkers)
+	errChan := make(chan error, numWorkers)
 
-	for i := 0; i < WorkerCount; i++ {
+	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 
 		startByte := int64(i) * partSize
@@ -134,7 +136,7 @@ func simpleDownload(args DownloaderArgs) error {
 
 		//process the last part, it may have remaining bytes
 		//example: 15=3*4+3, so the last part is for 3
-		if i == WorkerCount-1 {
+		if i == numWorkers-1 {
 			endByte = fileSize - 1
 		}
 
@@ -213,7 +215,7 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 			fmt.Printf("Error reading part %d: %v\n", id, er)
 			return er
 		}
-	
+
 	}
 	//fmt.Printf("Part %d completed\n", id)
 	return nil
