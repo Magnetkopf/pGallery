@@ -21,6 +21,7 @@ func main() {
 		flagCookieFile := syncCmd.String("cookie", "cookie.txt", "where is your cookie.txt")
 		flagUser := syncCmd.String("user", "", "bookmarks' owner id to sync")
 		flagBase := syncCmd.String("base", "downloads", "base directory to save artworks")
+		flagDownloader := syncCmd.String("downloader", "aria2c", "downloader to use (aria2c / built-in)")
 
 		syncCmd.Parse(os.Args[2:])
 
@@ -37,9 +38,10 @@ func main() {
 		}
 
 		cli.Sync(cli.SyncArgs{
-			UserID: *flagUser,
-			Cookie: strings.TrimSpace(string(cookieBytes)),
-			Base:   *flagBase,
+			UserID:     *flagUser,
+			Cookie:     strings.TrimSpace(string(cookieBytes)),
+			Base:       *flagBase,
+			Downloader: *flagDownloader,
 		})
 
 	case "build":

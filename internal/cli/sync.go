@@ -18,9 +18,10 @@ import (
 )
 
 type SyncArgs struct {
-	Cookie string
-	UserID string
-	Base   string
+	Cookie     string
+	UserID     string
+	Base       string
+	Downloader string
 }
 
 const limitPerPage = 48
@@ -124,11 +125,12 @@ func Sync(args SyncArgs) {
 			var fileName = "p" + strconv.Itoa(int(i)) + "." + fileExtension
 			newUrl := strings.Replace(url, "_p0.", "_p"+strconv.Itoa(int(i))+".", -1)
 
-			downloadResult := utils.Download(utils.Aria2cArgs{
+			downloadResult := utils.Download(utils.DownloaderArgs{
 				Url:         newUrl,
 				SavePath:    artworkPath,
 				FileName:    fileName,
 				Referer:     "https://www.pixiv.net",
+				Downloader:  args.Downloader,
 			})
 
 			if downloadResult {
@@ -155,11 +157,12 @@ func Sync(args SyncArgs) {
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
 		if artistPFPUrl != "" {
-			downloadResult := utils.Download(utils.Aria2cArgs{
+			downloadResult := utils.Download(utils.DownloaderArgs{
 				Url:      artistPFPUrl,
 				SavePath: artistPath,
 				FileName: "folder.jpg",
 				Referer:  "https://www.pixiv.net",
+				Downloader: args.Downloader,
 			})
 			if downloadResult {
 				fullFilePath := filepath.Join(artistPath, "folder.jpg")
