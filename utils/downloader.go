@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -16,10 +17,10 @@ import (
 const WorkerCount = 8
 
 type DownloaderArgs struct {
-	Url      string
-	SavePath string
-	FileName string
-	Referer  string
+	Url        string
+	SavePath   string
+	FileName   string
+	Referer    string
 	Downloader string
 }
 
@@ -84,6 +85,8 @@ func simpleDownload(args DownloaderArgs) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return errors.New("Bad status code: " + resp.Status)
 	}
@@ -104,7 +107,7 @@ func simpleDownload(args DownloaderArgs) error {
 	}
 
 	//create file
-	outFile, err := os.Create(args.SavePath + "/" + args.FileName)
+	outFile, err := os.Create(filepath.Join(args.SavePath, args.FileName))
 	if err != nil {
 		return err
 	}
@@ -121,6 +124,8 @@ func simpleDownload(args DownloaderArgs) error {
 
 	//start multiple threads
 	progressChan := make(chan int64, WorkerCount)
+	errChan := make(chan error, WorkerCount)
+
 	for i := 0; i < WorkerCount; i++ {
 		wg.Add(1)
 
@@ -136,7 +141,9 @@ func simpleDownload(args DownloaderArgs) error {
 		//start download
 		go func(id int, start, end int64) {
 			defer wg.Done()
-			downloadPart(id, args.Url, args.Referer, start, end, outFile, progressChan)
+			if err := downloadPart(id, args.Url, args.Referer, start, end, outFile, progressChan); err != nil {
+				errChan <- err
+			}
 		}(i, startByte, endByte)
 	}
 
@@ -156,13 +163,18 @@ func simpleDownload(args DownloaderArgs) error {
 	wg.Wait()
 	close(progressChan)
 	<-doneChan
+	close(errChan)
+
+	if len(errChan) > 0 {
+		return <-errChan
+	}
 
 	return nil
 
 }
 
 // downloadPart downloads parts of the file
-func downloadPart(id int, url string, referer string, start, end int64, file *os.File, progress chan<- int64) {
+func downloadPart(id int, url string, referer string, start, end int64, file *os.File, progress chan<- int64) error {
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
 	if referer != "" {
@@ -175,7 +187,7 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Printf("Error downloading part %d: %v\n", id, err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -189,7 +201,7 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 			_, ew := file.WriteAt(buf[0:nr], start+written)
 			if ew != nil {
 				fmt.Printf("Error writing part %d: %v\n", id, ew)
-				return
+				return ew
 			}
 			written += int64(nr)
 			progress <- int64(nr)
@@ -199,8 +211,10 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 		}
 		if er != nil {
 			fmt.Printf("Error reading part %d: %v\n", id, er)
-			return
+			return er
 		}
+	
 	}
 	//fmt.Printf("Part %d completed\n", id)
+	return nil
 }
