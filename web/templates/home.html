@@ -17,4 +17,28 @@
 			</div>
 		{{end}}
 	</div>
+	<div class="pagination" style="margin-top: 20px; text-align: center;">
+		{{if .Pagination.HasPrev}}
+			<a href="/?page={{.Pagination.PrevPage}}&limit={{.Pagination.Limit}}&{{.Query}}">Previous</a>
+		{{end}}
+		<span style="margin: 0 10px;">Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}} ({{.Pagination.TotalItems}} items)</span>
+		{{if .Pagination.HasNext}}
+			<a href="/?page={{.Pagination.NextPage}}&limit={{.Pagination.Limit}}&{{.Query}}">Next</a>
+		{{end}}
+
+		<div class="limit-selector" style="margin-top: 10px;">
+			Show: 
+			<a href="/?limit=20&{{.Query}}">20</a>
+			<a href="/?limit=50&{{.Query}}">50</a>
+			<a href="/?limit=100&{{.Query}}">100</a>
+			| Custom: <input type="number" id="customLimit" value="{{.Pagination.Limit}}" style="width: 60px;">
+			<button onclick="applyLimit()">Go</button>
+		</div>
+	</div>
+	<script>
+		function applyLimit() {
+			var limit = document.getElementById('customLimit').value;
+			window.location.href = "/?page=1&limit=" + limit + "&{{.Query}}";
+		}
+	</script>
 {{end}}
