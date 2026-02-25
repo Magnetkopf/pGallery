@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 const WorkerCount = 8
 
 type DownloaderArgs struct {
+	ID         string
 	Url        string
 	SavePath   string
 	FileName   string
@@ -24,9 +26,16 @@ type DownloaderArgs struct {
 	Downloader string
 }
 
+var aria2cAvailable bool
+var checkAria2cOnce sync.Once
+
 // Download chooses aria2c or built-in downloader to download file
 func Download(args DownloaderArgs) bool {
-	if !checkAria2c() || args.Downloader == "built-in" {
+	checkAria2cOnce.Do(func() {
+		aria2cAvailable = checkAria2c()
+	})
+
+	if !aria2cAvailable || args.Downloader == "built-in" {
 		//aria2c not found or built-in downloader is specified
 		err := simpleDownload(args)
 		if err != nil {
@@ -94,7 +103,9 @@ func simpleDownload(args DownloaderArgs) error {
 	//get file size
 	contentLength := resp.Header.Get("Content-Length")
 	fileSize, _ := strconv.ParseInt(contentLength, 10, 64)
-	fmt.Printf("📦 File size: %.2f MB\n", float64(fileSize)/1024/1024)
+	if fileSize > 0 {
+		UILog(fmt.Sprintf("📦 %s: %.2f MB", args.ID, float64(fileSize)/1024/1024))
+	}
 
 	//ensure directory exists
 	if err := os.MkdirAll(args.SavePath, 0755); err != nil {
@@ -116,15 +127,20 @@ func simpleDownload(args DownloaderArgs) error {
 	//calculate part size
 	var wg sync.WaitGroup
 	numWorkers := WorkerCount
-	partSize := fileSize / int64(numWorkers)
+	var partSize int64
 
-	//if not support range, download as one part
-	if resp.Header.Get("Accept-Ranges") != "bytes" {
+	//if not support range, size unknown, or size too small
+	if fileSize <= 0 || fileSize < int64(numWorkers) || resp.Header.Get("Accept-Ranges") != "bytes" {
 		partSize = fileSize
 		numWorkers = 1
+	} else {
+		partSize = fileSize / int64(numWorkers)
 	}
 
 	//start multiple threads
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	progressChan := make(chan int64, numWorkers)
 	errChan := make(chan error, numWorkers)
 
@@ -143,21 +159,30 @@ func simpleDownload(args DownloaderArgs) error {
 		//start download
 		go func(id int, start, end int64) {
 			defer wg.Done()
-			if err := downloadPart(id, args.Url, args.Referer, start, end, outFile, progressChan); err != nil {
+			if err := downloadPart(ctx, id, args.Url, args.Referer, start, end, outFile, progressChan); err != nil {
 				errChan <- err
+				cancel() // cancel other parts if one fails
 			}
 		}(i, startByte, endByte)
 	}
 
+	UIAddDownload(args.ID)
 	doneChan := make(chan bool)
 	go func() {
 		var totalDownloaded int64
-		for n := range progressChan {
-			totalDownloaded += n
-			percent := float64(totalDownloaded) / float64(fileSize) * 100
-			fmt.Printf("\r⏳ Downloading: %.2f%%", percent) //use \r to keep the same line
+		if fileSize > 0 {
+			for n := range progressChan {
+				totalDownloaded += n
+				percent := float64(totalDownloaded) / float64(fileSize) * 100
+				UIUpdateDownload(args.ID, percent)
+			}
+		} else {
+			// fallback if size unknown
+			for range progressChan {
+				UIUpdateDownload(args.ID, 0)
+			}
 		}
-		fmt.Println() //new line
+		UIRemoveDownload(args.ID)
 		doneChan <- true
 	}()
 
@@ -176,22 +201,27 @@ func simpleDownload(args DownloaderArgs) error {
 }
 
 // downloadPart downloads parts of the file
-func downloadPart(id int, url string, referer string, start, end int64, file *os.File, progress chan<- int64) error {
-	client := &http.Client{}
-	req, _ := http.NewRequest("GET", url, nil)
+func downloadPart(ctx context.Context, id int, url string, referer string, start, end int64, file *os.File, progress chan<- int64) error {
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if referer != "" {
 		req.Header.Set("Referer", referer)
 	}
 
 	//set Range header
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	if end >= 0 && end >= start {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	}
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Printf("Error downloading part %d: %v\n", id, err)
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return fmt.Errorf("bad status code in part %d: %d\n", id, resp.StatusCode)
+	}
 
 	//buffer
 	buf := make([]byte, 32*1024) // 32KB
@@ -219,4 +249,51 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 	}
 	//fmt.Printf("Part %d completed\n", id)
 	return nil
+}
+
+// DownloadTask represents a single download task
+type DownloadTask struct {
+	Args       DownloaderArgs
+	OnComplete func(success bool)
+}
+
+// DownloadManager handles concurrent downloads
+type DownloadManager struct {
+	tasks chan DownloadTask
+	wg    sync.WaitGroup
+}
+
+// NewDownloadManager creates a new download manager with a worker pool
+func NewDownloadManager(workers int) *DownloadManager {
+	dm := &DownloadManager{
+		tasks: make(chan DownloadTask, 100), // buffered channel
+	}
+
+	for i := 0; i < workers; i++ {
+		dm.wg.Add(1)
+		go dm.worker()
+	}
+
+	return dm
+}
+
+func (dm *DownloadManager) worker() {
+	defer dm.wg.Done()
+	for task := range dm.tasks {
+		success := Download(task.Args)
+		if task.OnComplete != nil {
+			task.OnComplete(success)
+		}
+	}
+}
+
+// Add appends a task to the queue
+func (dm *DownloadManager) Add(task DownloadTask) {
+	dm.tasks <- task
+}
+
+// Wait blocks until all added tasks are processed
+func (dm *DownloadManager) Wait() {
+	close(dm.tasks)
+	dm.wg.Wait()
 }
