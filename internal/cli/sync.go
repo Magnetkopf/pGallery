@@ -31,6 +31,9 @@ func Sync(args SyncArgs) {
 		Cookie: args.Cookie,
 	}
 
+	utils.InitUI()
+	defer utils.StopUI()
+
 	downloadManager := utils.NewDownloadManager(5)
 	defer downloadManager.Wait()
 
@@ -94,11 +97,11 @@ func Sync(args SyncArgs) {
 
 	}
 
-	fmt.Printf("Found %d artworks, Expect %d artworks\n", len(artworkList), totalArtworks)
+	utils.UILog(fmt.Sprintf("Found %d artworks, Expect %d artworks", len(artworkList), totalArtworks))
 
 	for _, artworkID := range artworkList {
 		if downloadedMap[artworkID] {
-			fmt.Printf("\033[1;36m Skipped: %d \033[0m\n", artworkID)
+			utils.UILog(fmt.Sprintf("\033[1;36m Skipped: %d \033[0m", artworkID))
 			continue
 		}
 
@@ -138,9 +141,11 @@ func Sync(args SyncArgs) {
 			capFileName := fileName
 			capFileExt := fileExtension
 			capArtworkPath := artworkPath
+			capTaskID := fmt.Sprintf("%d_%s", artworkID, fileName)
 
 			downloadManager.Add(utils.DownloadTask{
 				Args: utils.DownloaderArgs{
+					ID:         capTaskID,
 					Url:        newUrl,
 					SavePath:   capArtworkPath,
 					FileName:   capFileName,
@@ -169,15 +174,17 @@ func Sync(args SyncArgs) {
 				},
 			})
 		}
-		fmt.Printf("Queued: %d\n", artworkID)
+		utils.UILog(fmt.Sprintf("Queued: %d", artworkID))
 
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
 		if artistPFPUrl != "" {
 			capArtistPath := artistPath
 			capArtistPFPUrl := artistPFPUrl
+			capArtistTaskID := fmt.Sprintf("%d(pfp)", artistID)
 			downloadManager.Add(utils.DownloadTask{
 				Args: utils.DownloaderArgs{
+					ID:         capArtistTaskID,
 					Url:        capArtistPFPUrl,
 					SavePath:   capArtistPath,
 					FileName:   "folder.jpg",

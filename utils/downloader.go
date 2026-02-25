@@ -17,6 +17,7 @@ import (
 const WorkerCount = 8
 
 type DownloaderArgs struct {
+	ID         string
 	Url        string
 	SavePath   string
 	FileName   string
@@ -101,7 +102,9 @@ func simpleDownload(args DownloaderArgs) error {
 	//get file size
 	contentLength := resp.Header.Get("Content-Length")
 	fileSize, _ := strconv.ParseInt(contentLength, 10, 64)
-	fmt.Printf("📦 File size: %.2f MB\n", float64(fileSize)/1024/1024)
+	if fileSize > 0 {
+		UILog(fmt.Sprintf("📦 %s: %.2f MB", args.ID, float64(fileSize)/1024/1024))
+	}
 
 	//ensure directory exists
 	if err := os.MkdirAll(args.SavePath, 0755); err != nil {
@@ -156,15 +159,23 @@ func simpleDownload(args DownloaderArgs) error {
 		}(i, startByte, endByte)
 	}
 
+	UIAddDownload(args.ID)
 	doneChan := make(chan bool)
 	go func() {
 		var totalDownloaded int64
-		for n := range progressChan {
-			totalDownloaded += n
-			percent := float64(totalDownloaded) / float64(fileSize) * 100
-			fmt.Printf("\r⏳ Downloading: %.2f%%", percent) //use \r to keep the same line
+		if fileSize > 0 {
+			for n := range progressChan {
+				totalDownloaded += n
+				percent := float64(totalDownloaded) / float64(fileSize) * 100
+				UIUpdateDownload(args.ID, percent)
+			}
+		} else {
+			// fallback if size unknown
+			for range progressChan {
+				UIUpdateDownload(args.ID, 0)
+			}
 		}
-		fmt.Println() //new line
+		UIRemoveDownload(args.ID)
 		doneChan <- true
 	}()
 
