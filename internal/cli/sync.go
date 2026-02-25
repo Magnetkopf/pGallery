@@ -130,6 +130,7 @@ func Sync(args SyncArgs) {
 			continue
 		}
 
+		utils.UILog(fmt.Sprintf("👀 %d", artworkID))
 		// Download all pictures
 		pageCount := gjson.Get(illustRes, "body.pageCount").Uint()
 		for i := uint64(0); i < pageCount; i++ { //download all pictures
@@ -174,7 +175,7 @@ func Sync(args SyncArgs) {
 				},
 			})
 		}
-		utils.UILog(fmt.Sprintf("👀 %d", artworkID))
+		
 
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
