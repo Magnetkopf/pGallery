@@ -75,7 +75,7 @@ func Sync(args SyncArgs) {
 
 	for i := 0; i < totalPages; i++ {
 		offset := i * limitPerPage
-		log.Printf("Fetching page %d/%d...", i+1, totalPages)
+		log.Printf("🔍 Fetching page %d/%d...", i+1, totalPages)
 
 		dest = fmt.Sprintf("https://www.pixiv.net/ajax/user/%s/illusts/bookmarks?tag=&offset=%d&limit=%d&rest=show&lang=en", args.UserID, offset, limitPerPage)
 		bookmarkRes, err := client.Get(dest)
@@ -174,7 +174,7 @@ func Sync(args SyncArgs) {
 				},
 			})
 		}
-		utils.UILog(fmt.Sprintf("Queued: %d", artworkID))
+		utils.UILog(fmt.Sprintf("👀 %d", artworkID))
 
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
