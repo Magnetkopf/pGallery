@@ -31,6 +31,9 @@ func Sync(args SyncArgs) {
 		Cookie: args.Cookie,
 	}
 
+	downloadManager := utils.NewDownloadManager(5)
+	defer downloadManager.Wait()
+
 	// Ensure base directory exists
 	if err := os.MkdirAll(args.Base, 0755); err != nil {
 		log.Fatalf("Failed to create base directory: %v", err)
@@ -118,6 +121,12 @@ func Sync(args SyncArgs) {
 		artworkYamlFile := filepath.Join(artworkPath, "artwork.yaml")
 		artistYamlFile := filepath.Join(artistPath, "artist.yaml")
 
+		// Create folder
+		if err := os.MkdirAll(artworkPath, 0755); err != nil {
+			log.Printf("⚠️ Failed to create artwork directory: %v", err)
+			continue
+		}
+
 		// Download all pictures
 		pageCount := gjson.Get(illustRes, "body.pageCount").Uint()
 		for i := uint64(0); i < pageCount; i++ { //download all pictures
@@ -125,55 +134,68 @@ func Sync(args SyncArgs) {
 			var fileName = "p" + strconv.Itoa(int(i)) + "." + fileExtension
 			newUrl := strings.Replace(url, "_p0.", "_p"+strconv.Itoa(int(i))+".", -1)
 
-			downloadResult := utils.Download(utils.DownloaderArgs{
-				Url:         newUrl,
-				SavePath:    artworkPath,
-				FileName:    fileName,
-				Referer:     "https://www.pixiv.net",
-				Downloader:  args.Downloader,
-			})
+			capI := i
+			capFileName := fileName
+			capFileExt := fileExtension
+			capArtworkPath := artworkPath
 
-			if downloadResult {
-				fullFilePath := filepath.Join(artworkPath, fileName)
-				err = utils.ModifyPictureExtension(fullFilePath)
-				if err != nil {
-					log.Printf("⚠️ Failed to modify picture extension: %v", err)
-					continue
-				}
+			downloadManager.Add(utils.DownloadTask{
+				Args: utils.DownloaderArgs{
+					Url:        newUrl,
+					SavePath:   capArtworkPath,
+					FileName:   capFileName,
+					Referer:    "https://www.pixiv.net",
+					Downloader: args.Downloader,
+				},
+				OnComplete: func(success bool) {
+					if success {
+						fullFilePath := filepath.Join(capArtworkPath, capFileName)
+						err := utils.ModifyPictureExtension(fullFilePath)
+						if err != nil {
+							log.Printf("⚠️ Failed to modify picture extension: %v", err)
+							return
+						}
 
-				if i == 0 { //copy p0 as folder picture
-					folderFileName := "folder." + fileExtension
-					folderFilePath := filepath.Join(artworkPath, folderFileName)
-					if err := utils.CopyFile(fullFilePath, folderFilePath); err != nil {
-						log.Printf("⚠️ Failed to create folder image: %v", err)
+						if capI == 0 { //copy p0 as folder picture
+							folderFileName := "folder." + capFileExt
+							folderFilePath := filepath.Join(capArtworkPath, folderFileName)
+							if err := utils.CopyFile(fullFilePath, folderFilePath); err != nil {
+								log.Printf("⚠️ Failed to create folder image: %v", err)
+							}
+						}
+					} else {
+						log.Fatalf("failed to download %s", capFileName)
 					}
-				}
-			} else {
-				log.Fatalf("failed to download %s", fileName)
-			}
+				},
+			})
 		}
-		fmt.Printf("Downloaded: %d\n", artworkID)
+		fmt.Printf("Queued: %d\n", artworkID)
 
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
 		if artistPFPUrl != "" {
-			downloadResult := utils.Download(utils.DownloaderArgs{
-				Url:      artistPFPUrl,
-				SavePath: artistPath,
-				FileName: "folder.jpg",
-				Referer:  "https://www.pixiv.net",
-				Downloader: args.Downloader,
+			capArtistPath := artistPath
+			capArtistPFPUrl := artistPFPUrl
+			downloadManager.Add(utils.DownloadTask{
+				Args: utils.DownloaderArgs{
+					Url:        capArtistPFPUrl,
+					SavePath:   capArtistPath,
+					FileName:   "folder.jpg",
+					Referer:    "https://www.pixiv.net",
+					Downloader: args.Downloader,
+				},
+				OnComplete: func(success bool) {
+					if success {
+						fullFilePath := filepath.Join(capArtistPath, "folder.jpg")
+						err := utils.ModifyPictureExtension(fullFilePath)
+						if err != nil {
+							log.Printf("⚠️ Failed to modify picture extension: %v", err)
+						}
+					} else {
+						log.Printf("⚠️ Failed to download artist pfp: %s", capArtistPFPUrl)
+					}
+				},
 			})
-			if downloadResult {
-				fullFilePath := filepath.Join(artistPath, "folder.jpg")
-				err = utils.ModifyPictureExtension(fullFilePath)
-				if err != nil {
-					log.Printf("⚠️ Failed to modify picture extension: %v", err)
-				}
-			} else {
-				log.Printf("⚠️ Failed to download artist pfp: %s", artistPFPUrl)
-
-			}
 		}
 
 		// YAML files

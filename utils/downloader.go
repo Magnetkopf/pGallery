@@ -24,9 +24,16 @@ type DownloaderArgs struct {
 	Downloader string
 }
 
+var aria2cAvailable bool
+var checkAria2cOnce sync.Once
+
 // Download chooses aria2c or built-in downloader to download file
 func Download(args DownloaderArgs) bool {
-	if !checkAria2c() || args.Downloader == "built-in" {
+	checkAria2cOnce.Do(func() {
+		aria2cAvailable = checkAria2c()
+	})
+
+	if !aria2cAvailable || args.Downloader == "built-in" {
 		//aria2c not found or built-in downloader is specified
 		err := simpleDownload(args)
 		if err != nil {
@@ -219,4 +226,51 @@ func downloadPart(id int, url string, referer string, start, end int64, file *os
 	}
 	//fmt.Printf("Part %d completed\n", id)
 	return nil
+}
+
+// DownloadTask represents a single download task
+type DownloadTask struct {
+	Args       DownloaderArgs
+	OnComplete func(success bool)
+}
+
+// DownloadManager handles concurrent downloads
+type DownloadManager struct {
+	tasks chan DownloadTask
+	wg    sync.WaitGroup
+}
+
+// NewDownloadManager creates a new download manager with a worker pool
+func NewDownloadManager(workers int) *DownloadManager {
+	dm := &DownloadManager{
+		tasks: make(chan DownloadTask, 100), // buffered channel
+	}
+
+	for i := 0; i < workers; i++ {
+		dm.wg.Add(1)
+		go dm.worker()
+	}
+
+	return dm
+}
+
+func (dm *DownloadManager) worker() {
+	defer dm.wg.Done()
+	for task := range dm.tasks {
+		success := Download(task.Args)
+		if task.OnComplete != nil {
+			task.OnComplete(success)
+		}
+	}
+}
+
+// Add appends a task to the queue
+func (dm *DownloadManager) Add(task DownloadTask) {
+	dm.tasks <- task
+}
+
+// Wait blocks until all added tasks are processed
+func (dm *DownloadManager) Wait() {
+	close(dm.tasks)
+	dm.wg.Wait()
 }
