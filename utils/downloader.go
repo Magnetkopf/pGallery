@@ -35,16 +35,31 @@ func Download(args DownloaderArgs) bool {
 		aria2cAvailable = checkAria2c()
 	})
 
-	if !aria2cAvailable || args.Downloader == "built-in" {
-		//aria2c not found or built-in downloader is specified
-		err := simpleDownload(args)
-		if err != nil {
-			log.Printf("Failed to download %s: %v", args.Url, err)
-			return false
-		}
-		return true
+	if args.Downloader == "aria2c" && aria2cAvailable {
+		return useAria2c(args)
 	}
 
+	err := simpleDownload(args)
+	if err != nil {
+		log.Printf("Failed to download %s: %v", args.Url, err)
+		return false
+	}
+	return true
+}
+
+// checkAria2c checks if aria2c is available in PATH
+func checkAria2c() bool {
+	cmd := exec.Command("aria2c", "--version")
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("aria2c not found, falling back to built-in downloader: %v", err)
+		return false
+	}
+	return true
+}
+
+// useAria2c calls aria2c for downloading
+func useAria2c(args DownloaderArgs) bool {
 	maxRetries := 5
 	for attempts := 0; attempts < maxRetries; attempts++ {
 		cmd := exec.Command("aria2c",
@@ -67,16 +82,6 @@ func Download(args DownloaderArgs) bool {
 	}
 	log.Fatalf("Failed to download after %d attempts: %s", maxRetries, args.Url)
 	return false
-}
-
-func checkAria2c() bool {
-	cmd := exec.Command("aria2c", "--version")
-	err := cmd.Run()
-	if err != nil {
-		log.Fatalf("aria2c not found: %v", err)
-		return false
-	}
-	return true
 }
 
 // simpleDownload uses built-in downloader to download file
