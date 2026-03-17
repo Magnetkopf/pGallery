@@ -10,6 +10,8 @@ Self-hosted pixiv gallery with built-in sync.
 
 ## Usage
 
+Read [📖 Docs](docs/usage.md)
+
 ~~~bash
 #Sync bookmark
 ./pGallery sync -user <userid> -cookie <cookiefile> -base <dir>
