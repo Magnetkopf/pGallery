@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Magnetkopf/pGallery/internal/model"
@@ -133,6 +135,11 @@ func Sync(args SyncArgs) {
 		utils.UILog(fmt.Sprintf("👀 %d", artworkID))
 		// Download all pictures
 		pageCount := gjson.Get(illustRes, "body.pageCount").Uint()
+
+		// Track successful page downloads; only record artwork as done when all pages succeed.
+		var successCount atomic.Int32
+		var artworkWg sync.WaitGroup
+
 		for i := uint64(0); i < pageCount; i++ { //download all pictures
 			fileExtension := url[len(url)-3:] //file extension
 			var fileName = "p" + strconv.Itoa(int(i)) + "." + fileExtension
@@ -143,6 +150,7 @@ func Sync(args SyncArgs) {
 			capFileExt := fileExtension
 			capArtworkPath := artworkPath
 			capTaskID := fmt.Sprintf("%d_%s", artworkID, fileName)
+			artworkWg.Add(1)
 
 			downloadManager.Add(utils.DownloadTask{
 				Args: utils.DownloaderArgs{
@@ -154,7 +162,9 @@ func Sync(args SyncArgs) {
 					Downloader: args.Downloader,
 				},
 				OnComplete: func(success bool) {
+					defer artworkWg.Done()
 					if success {
+						successCount.Add(1)
 						fullFilePath := filepath.Join(capArtworkPath, capFileName)
 						err := utils.ModifyPictureExtension(fullFilePath)
 						if err != nil {
@@ -170,12 +180,11 @@ func Sync(args SyncArgs) {
 							}
 						}
 					} else {
-						log.Fatalf("failed to download %s", capFileName)
+						log.Printf("⚠️ Failed to download %s", capFileName)
 					}
 				},
 			})
 		}
-		
 
 		// Download artist pfp
 		artistPFPUrl := artistPFP[artistID]
@@ -183,6 +192,7 @@ func Sync(args SyncArgs) {
 			capArtistPath := artistPath
 			capArtistPFPUrl := artistPFPUrl
 			capArtistTaskID := fmt.Sprintf("%d(pfp)", artistID)
+			artworkWg.Add(1)
 			downloadManager.Add(utils.DownloadTask{
 				Args: utils.DownloaderArgs{
 					ID:         capArtistTaskID,
@@ -193,6 +203,7 @@ func Sync(args SyncArgs) {
 					Downloader: args.Downloader,
 				},
 				OnComplete: func(success bool) {
+					defer artworkWg.Done()
 					if success {
 						fullFilePath := filepath.Join(capArtistPath, "folder.jpg")
 						err := utils.ModifyPictureExtension(fullFilePath)
@@ -204,6 +215,25 @@ func Sync(args SyncArgs) {
 					}
 				},
 			})
+		}
+
+		// Wait for all tasks (pages + pfp) of this artwork to finish
+		artworkWg.Wait()
+
+		if successCount.Load() == int32(pageCount) {
+			downloadedMap[artworkID] = true
+			var idsToWrite []int
+			for id := range downloadedMap {
+				idsToWrite = append(idsToWrite, id)
+			}
+
+			if jsonData, err := json.MarshalIndent(idsToWrite, "", "  "); err == nil {
+				_ = os.WriteFile(downloadedRecordPath, jsonData, 0644)
+			}
+			utils.UILog(fmt.Sprintf("\033[1;32m ✅ Recorded: %d \033[0m", artworkID))
+		} else {
+			log.Printf("⚠️ Artwork %d: only %d/%d pages succeeded, NOT marking as downloaded",
+				artworkID, successCount.Load(), pageCount)
 		}
 
 		// YAML files
@@ -256,20 +286,6 @@ func Sync(args SyncArgs) {
 			log.Fatalf("Error writing YAML file: %v", err)
 		}
 
-		//mark downloaded artwork
-		downloadedMap[artworkID] = true
-
-		//map -> slice
-		var idsToWrite []int
-		for id := range downloadedMap {
-			idsToWrite = append(idsToWrite, id)
-		}
-
-		if jsonData, err := json.MarshalIndent(idsToWrite, "", "  "); err == nil {
-			_ = os.WriteFile(downloadedRecordPath, jsonData, 0644)
-		}
-
 		time.Sleep(1 * time.Second) //wait 1s
-
 	}
 }

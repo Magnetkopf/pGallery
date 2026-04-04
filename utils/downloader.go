@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+const (
+	downloadMaxRetries = 10
+	downloadRetryDelay = 3 * time.Second
+)
+
 const WorkerCount = 8
 
 type DownloaderArgs struct {
@@ -60,8 +65,7 @@ func checkAria2c() bool {
 
 // useAria2c calls aria2c for downloading
 func useAria2c(args DownloaderArgs) bool {
-	maxRetries := 5
-	for attempts := 0; attempts < maxRetries; attempts++ {
+	for attempts := 0; attempts < downloadMaxRetries; attempts++ {
 		cmd := exec.Command("aria2c",
 			"--allow-overwrite=true",
 			"--referer", args.Referer,
@@ -76,16 +80,30 @@ func useAria2c(args DownloaderArgs) bool {
 		if err == nil {
 			return true
 		} else {
-			log.Printf("Failed to download %s (attempt %d/%d), retrying in 1s... (%v)", args.Url, attempts+1, maxRetries, err)
-			time.Sleep(1 * time.Second)
+			log.Printf("Failed to download %s (attempt %d/%d), retrying in %s... (%v)", args.Url, attempts+1, downloadMaxRetries, downloadRetryDelay, err)
+			time.Sleep(downloadRetryDelay)
 		}
 	}
-	log.Fatalf("Failed to download after %d attempts: %s", maxRetries, args.Url)
+	log.Fatalf("Failed to download after %d attempts: %s", downloadMaxRetries, args.Url)
 	return false
 }
 
-// simpleDownload uses built-in downloader to download file
+// simpleDownload uses built-in downloader to download file, retrying on network errors.
 func simpleDownload(args DownloaderArgs) error {
+	var lastErr error
+	for attempt := 1; attempt <= downloadMaxRetries; attempt++ {
+		lastErr = simpleDownloadOnce(args)
+		if lastErr == nil {
+			return nil
+		}
+		log.Printf("⚠️ Download attempt %d/%d failed for %s: %v — retrying in %s...",
+			attempt, downloadMaxRetries, args.ID, lastErr, downloadRetryDelay)
+		time.Sleep(downloadRetryDelay)
+	}
+	return fmt.Errorf("😢 Gave up after %d attempts: %w", downloadMaxRetries, lastErr)
+}
+// simpleDownloadOnce performs a single download attempt.
+func simpleDownloadOnce(args DownloaderArgs) error {
 
 	//send head request
 	req, err := http.NewRequest("HEAD", args.Url, nil)
@@ -202,58 +220,84 @@ func simpleDownload(args DownloaderArgs) error {
 	}
 
 	return nil
-
 }
 
-// downloadPart downloads parts of the file
+// downloadPart downloads a byte-range segment of the file, retrying from the
+// last written offset on transient network errors.
 func downloadPart(ctx context.Context, id int, url string, referer string, start, end int64, file *os.File, progress chan<- int64) error {
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if referer != "" {
-		req.Header.Set("Referer", referer)
-	}
-
-	//set Range header
-	if end >= 0 && end >= start {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Printf("Error downloading part %d: %v\n", id, err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return fmt.Errorf("bad status code in part %d: %d\n", id, resp.StatusCode)
-	}
-
-	//buffer
-	buf := make([]byte, 32*1024) // 32KB
 	var written int64 = 0
 
-	for {
-		nr, er := resp.Body.Read(buf)
-		if nr > 0 {
-			_, ew := file.WriteAt(buf[0:nr], start+written)
-			if ew != nil {
-				fmt.Printf("Error writing part %d: %v\n", id, ew)
-				return ew
-			}
-			written += int64(nr)
-			progress <- int64(nr)
+	for attempt := 1; attempt <= downloadMaxRetries; attempt++ {
+		// Resume from where we left off after a partial write.
+		currentStart := start + written
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return err
 		}
-		if er == io.EOF {
-			break
-		}
-		if er != nil {
-			fmt.Printf("Error reading part %d: %v\n", id, er)
-			return er
+		if referer != "" {
+			req.Header.Set("Referer", referer)
 		}
 
+		//set Range header
+		if end >= 0 && end >= currentStart {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", currentStart, end))
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			log.Printf("⚠️  Part %d network error (attempt %d/%d): %v — retrying in %s...",
+				id, attempt, downloadMaxRetries, err, downloadRetryDelay)
+			time.Sleep(downloadRetryDelay)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+			resp.Body.Close()
+			return fmt.Errorf("bad status code in part %d: %d", id, resp.StatusCode)
+		}
+
+		//buffer
+		buf := make([]byte, 32*1024) // 32KB
+		var partErr error
+		for {
+			nr, er := resp.Body.Read(buf)
+			if nr > 0 {
+				_, ew := file.WriteAt(buf[0:nr], start+written)
+				if ew != nil {
+					log.Printf("Error writing part %d: %v", id, ew)
+					resp.Body.Close()
+					return ew
+				}
+				written += int64(nr)
+				progress <- int64(nr)
+			}
+			if er == io.EOF {
+				break
+			}
+			if er != nil {
+				partErr = er
+				break
+			}
+		}
+		resp.Body.Close()
+
+		if partErr == nil {
+			return nil // success
+		}
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		log.Printf("⚠️  Part %d read error (attempt %d/%d): %v — retrying in %s...",
+			id, attempt, downloadMaxRetries, partErr, downloadRetryDelay)
+		time.Sleep(downloadRetryDelay)
 	}
-	//fmt.Printf("Part %d completed\n", id)
-	return nil
+
+	return fmt.Errorf("part %d gave up after %d attempts", id, downloadMaxRetries)
 }
 
 // DownloadTask represents a single download task
