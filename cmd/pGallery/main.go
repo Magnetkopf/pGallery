@@ -74,7 +74,7 @@ func main() {
 
 	case "check":
 		checkCmd := flag.NewFlagSet("check", flag.ExitOnError)
-		flagBase := checkCmd.String("base", "", "base directory containing artworks")
+		flagBase := checkCmd.String("base", "downloads", "base directory containing artworks")
 
 		checkCmd.Parse(os.Args[2:])
 
