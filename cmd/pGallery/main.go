@@ -72,6 +72,22 @@ func main() {
 			Port: *flagPort,
 		})
 
+	case "check":
+		checkCmd := flag.NewFlagSet("check", flag.ExitOnError)
+		flagBase := checkCmd.String("base", "downloads", "base directory containing artworks")
+
+		checkCmd.Parse(os.Args[2:])
+
+		if *flagBase == "" {
+			fmt.Println("Error: -base is required")
+			checkCmd.PrintDefaults()
+			os.Exit(1)
+		}
+
+		cli.Check(cli.CheckArgs{
+			Base: *flagBase,
+		})
+
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -87,7 +103,8 @@ Usage:
 
 Commands:
   sync      Sync bookmarks for a user
-  build	  	Indexing the database
+  check     Verify downloaded artworks and repair downloaded.json
+  build     Index the database
   webui     Start web UI
 
 Use "pGallery <command> -help" for more information.

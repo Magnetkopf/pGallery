@@ -85,6 +85,28 @@ pGallery webui -base <dir> -port <port>
 
 ---
 
+### 4. Check
+Validate the downloaded artwork folders against the metadata in `downloaded.json`.
+
+~~~bash
+pGallery check -base <directory>
+~~~ 
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `-base` | Yes | `downloads` | Base directory containing artworks |
+
+The command scans each artwork ID recorded in `downloaded.json`, reads its
+`artwork.yaml` to get the expected page count, and verifies that the required
+files exist:
+* `folder.*` – thumbnail of the artwork
+* `p0.*`, `p1.*`, …, `p{pages‑1}.*` – each page image
+If any file is missing, the entire artwork folder is removed and the ID is
+deleted from `downloaded.json`. After the scan, a refreshed `downloaded.json`
+containing only the valid IDs is written.
+
+---
+
 ## Quick Start
 
 1. **Sync your bookmarks:**
