@@ -1,0 +1,33 @@
+{{define "content"}}
+	<div class="artist-profile">
+		<div class="artist-header">
+			{{if .Avatar}}
+				<img class="artist-pfp" src="/static/{{.Avatar}}" alt="{{.Artist.Name}}">
+			{{end}}
+			<div>
+				<h1>{{.Artist.Name}}</h1>
+				<div class="artist-meta">ID: {{.ArtistID}} | <a href="/?artist={{.ArtistID}}">Filter artworks</a></div>
+				<div class="artist-meta">{{len .Artworks}} artworks</div>
+			</div>
+		</div>
+		<div class="grid">
+			{{range .Artworks}}
+				<div class="card">
+					<img src="/static/{{.Thumbnail}}" loading="lazy" alt="{{.Title}}">
+					<a href="/artwork?id={{.ID}}">
+						<div class="title">{{.Title}}</div>
+					</a>
+					<div class="meta">ID: {{.ID}}</div>
+					<div class="meta">Pages: {{.PageCount}}</div>
+					<div class="meta">Artist: <a href="/?artist={{.ArtistID}}">filter</a></div>
+				</div>
+			{{end}}
+		</div>
+	</div>
+	<style>
+		.artist-profile { display: grid; gap: 20px; }
+		.artist-header { display: flex; gap: 16px; align-items: center; background: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }
+		.artist-pfp { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: #e6e6e6; flex-shrink: 0; }
+		.artist-meta { color: #666; margin-top: 4px; }
+	</style>
+{{end}}

@@ -3,7 +3,11 @@
 	<div class="list">
 		{{range .Items}}
 			<div class="list-item">
-				<a href="/?{{$.Type}}={{.Value}}">{{.Label}} ({{.Count}})</a>
+				{{if eq $.Type "artist"}}
+					<a href="/artists/{{.Value}}">{{.Label}}</a> ({{.Count}}) · <a href="/?artist={{.Value}}">filter</a>
+				{{else}}
+					<a href="/?{{$.Type}}={{.Value}}">{{.Label}} ({{.Count}})</a>
+				{{end}}
 			</div>
 		{{end}}
 	</div>
