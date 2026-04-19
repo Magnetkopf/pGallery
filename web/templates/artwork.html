@@ -1,34 +1,46 @@
 {{define "content"}}
-	<div class="artwork-detail">
-		<h1>{{.Artwork.Title}}</h1>
-		<div class="meta">
-			Artist: <a href="/?artist={{.Artwork.ArtistId}}">{{.Artwork.ArtistName}}</a> |
-			Date: {{.Artwork.CreateDate}} |
-			Pages: {{.Artwork.PageCount}}
-		</div>
-		<div class="tags">
-			Tags:
-			{{range .Artwork.Tags}}
-				<a href="/?tag={{.Tag}}">{{.Tag}}</a>
-			{{end}}
-		</div>
-		<div class="description">
-			{{.Artwork.Description}}
-		</div>
-		<div class="images">
-			{{range .Images}}
-				<div class="image-container">
-					<img src="/static/{{.}}" alt="Page">
+		<div class="artwork-detail">
+			<div class="artwork-header">
+				{{if .ArtistAvatar}}
+					<a class="artist-avatar-link" href="{{.ArtistLink}}">
+						<img class="artist-avatar" src="/static/{{.ArtistAvatar}}" alt="{{.Artwork.ArtistName}}">
+					</a>
+				{{end}}
+				<div>
+					<h1>{{.Artwork.Title}}</h1>
+					<div class="meta">
+						Artist: <a href="{{.ArtistLink}}">{{.Artwork.ArtistName}}</a> |
+						<a href="/?artist={{.Artwork.ArtistId}}">filter</a> |
+						Date: {{.Artwork.CreateDate}} |
+						Pages: {{.Artwork.PageCount}}
+					</div>
+					<div class="tags">
+						Tags:
+						{{range .Artwork.Tags}}
+							<a href="/?tag={{.Tag}}">{{.Tag}}</a>
+						{{end}}
+					</div>
 				</div>
-			{{end}}
+			</div>
+			<div class="description">{{.Artwork.Description}}</div>
+			<div class="images">
+				{{range .Images}}
+					<div class="image-container">
+						<img src="/static/{{.}}" alt="Page" loading="lazy">
+					</div>
+				{{end}}
+			</div>
 		</div>
-	</div>
-	<style>
-		.artwork-detail { background: #fff; padding: 20px; border-radius: 5px; }
-		.artwork-detail .meta { margin-bottom: 10px; color: #666; }
-		.artwork-detail .tags a { margin-right: 10px; text-decoration: none; color: #007bff; }
-		.artwork-detail .description { margin: 20px 0; white-space: pre-wrap; }
-		.image-container { margin-bottom: 20px; text-align: center; }
-		.image-container img { max-width: 100%; height: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-	</style>
-{{end}}
+		<style>
+			.artwork-detail { background: #fff; padding: 20px; border-radius: 5px; }
+			.artwork-header { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px; }
+			.artist-avatar-link { flex-shrink: 0; }
+			.artist-avatar { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; display: block; background: #e6e6e6; }
+			.artwork-detail .meta { margin-bottom: 10px; color: #666; }
+			.artwork-detail .tags a { margin-right: 10px; text-decoration: none; color: #007bff; }
+			.artwork-detail .description { margin: 20px 0; white-space: pre-wrap; }
+			.images { display: grid; gap: 20px; }
+			.image-container { text-align: center; }
+			.image-container img { max-width: min(100%, 1100px); max-height: 85vh; width: auto; height: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+		</style>
+	{{end}}

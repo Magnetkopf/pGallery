@@ -52,6 +52,7 @@ func Start(args ServerArgs) {
 	// Handlers
 	http.HandleFunc("/", ctx.handleHome)
 	http.HandleFunc("/artist", ctx.handleArtistList)
+	http.HandleFunc("/artists/", ctx.handleArtistProfile)
 	http.HandleFunc("/tag", ctx.handleTagList)
 	http.HandleFunc("/artwork", ctx.handleArtwork)
 
@@ -96,8 +97,17 @@ type ListView struct {
 }
 
 type ArtworkDetailView struct {
-	Artwork model.ArtworkData
-	Images  []string
+	Artwork      model.ArtworkData
+	Images       []string
+	ArtistLink   string
+	ArtistAvatar string
+}
+
+type ArtistProfileView struct {
+	ArtistID string
+	Artist   *model.ArtistDetail
+	Avatar   string
+	Artworks []*model.ArtworkCard
 }
 
 // Handlers Implementation
@@ -299,6 +309,61 @@ func renderList(w http.ResponseWriter, view ListView) {
 	}
 }
 
+func (ctx *WebContext) findArtistAvatar(artistID string) string {
+	files, err := os.ReadDir(filepath.Join(ctx.Base, artistID))
+	if err != nil {
+		return ""
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(file.Name(), "folder.") {
+			return filepath.Join(artistID, file.Name())
+		}
+	}
+
+	return ""
+}
+
+func (ctx *WebContext) handleArtistProfile(w http.ResponseWriter, r *http.Request) {
+	artistID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/artists/"), "/")
+	if artistID == "" || strings.Contains(artistID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	detail, ok := ctx.Store.ArtistIndex[artistID]
+	if !ok {
+		http.Error(w, "Artist not found", http.StatusNotFound)
+		return
+	}
+
+	artworks := append([]*model.ArtworkCard(nil), detail.Artworks...)
+	sort.Slice(artworks, func(i, j int) bool {
+		return artworks[i].ID > artworks[j].ID
+	})
+
+	view := ArtistProfileView{
+		ArtistID: artistID,
+		Artist:   detail,
+		Avatar:   ctx.findArtistAvatar(artistID),
+		Artworks: artworks,
+	}
+
+	tmpl, err := template.ParseFS(templateFS, "templates/layout.html", "templates/artist_profile.html")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	err = tmpl.Execute(w, view)
+	if err != nil {
+		log.Printf("Error executing template: %v", err)
+	}
+}
+
 func (ctx *WebContext) handleArtwork(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -354,8 +419,10 @@ func (ctx *WebContext) handleArtwork(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := ArtworkDetailView{
-		Artwork: artworkData,
-		Images:  images,
+		Artwork:      artworkData,
+		Images:       images,
+		ArtistLink:   "/artists/" + card.ArtistID,
+		ArtistAvatar: ctx.findArtistAvatar(card.ArtistID),
 	}
 
 	tmpl, err := template.ParseFS(templateFS, "templates/layout.html", "templates/artwork.html")
