@@ -51,9 +51,9 @@ func Start(args ServerArgs) {
 
 	// Handlers
 	http.HandleFunc("/", ctx.handleHome)
-	http.HandleFunc("/artist", ctx.handleArtistList)
+	http.HandleFunc("/artists", ctx.handleArtistList)
 	http.HandleFunc("/artists/", ctx.handleArtistProfile)
-	http.HandleFunc("/tag", ctx.handleTagList)
+	http.HandleFunc("/tags", ctx.handleTagList)
 	http.HandleFunc("/artwork", ctx.handleArtwork)
 
 	fs := http.FileServer(http.Dir(args.Base))
